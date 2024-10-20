@@ -252,6 +252,79 @@ Access the image chart via: http://127.0.0.1:8000/report/AAPL/image/
    - Public IPv4 address: 3.137.195.47
    - Key name: EC2_SSH_KEY.pem
 
+   Connect to EC2 instance through WSL
+
+   ```bash
+   cd /mnt/c/PycharmProjects/blockhouse
+   mv EC2_SSH_KEY.pem ~/
+   chmod 400 ~/EC2_SSH_KEY.pem
+   ssh -i ~/EC2_SSH_KEY.pem ubuntu@3.137.195.47
+   # Update EC2 Instance
+   sudo apt update && sudo apt upgrade -y
+   # Install Python 3 and Pip
+   sudo apt install python3-pip python3-dev python3-venv -y
+   # Install virtualenv
+   sudo apt install python3 python3-venv
+   # Clone my project from GitHub
+   git clone https://github.com/muyangli2855/blockhouse.git
+   cd your_repository
+   # Set Up the Virtual Environment
+   python3 -m venv venv
+   # Activate the virtual environment
+   source venv/bin/activate
+   # Install my project’s dependencies
+   pip install -r requirements.txt
+   # Install PostgreSQL
+   sudo apt install postgresql postgresql-contrib -y
+   ```
+
    Create a `.github/workflows/deploy.yml` file.
 
-7. 
+   Configure Gunicorn and Nginx
+
+   ```bash
+   # Install Gunicorn
+   pip install gunicorn
+   # Test Gunicorn
+   gunicorn --workers 3 blockhouse.wsgi:application
+   # Install and Configure Nginx
+   sudo apt install nginx -y
+   # Create an Nginx Configuration for Django
+   sudo nano /etc/nginx/sites-available/blockhouse
+   ```
+
+   Add configuration
+
+   ```
+   server {
+       listen 80;
+       server_name 3.137.195.47;
+   
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   
+       location /static/ {
+           alias /home/ubuntu/blockhouse/static/;
+       }
+   
+       location /media/ {
+           alias /home/ubuntu/blockhouse/media/;
+       }
+   }
+   
+   ```
+
+   Enable the Nginx Configuration
+
+   ```
+   sudo ln -s /etc/nginx/sites-available/blockhouse/etc/nginx/sites-enabled
+   sudo rm /etc/nginx/sites-enabled/default
+   sudo systemctl restart nginx
+   ```
+
+   
