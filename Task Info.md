@@ -782,3 +782,253 @@ Create a `README.md` that includes instructions for:
 ---
 
 This will give you a fully dockerized, AWS-hosted application with a CI/CD pipeline for automated deployments. Let me know if you need more details on any specific step!
+```
+
+
+
+
+
+## 111
+
+Yes, you can deploy your Django project directly to AWS without using Docker by setting up a **virtual environment** on an **EC2 instance** and configuring the application manually. Here's a step-by-step guide to deploy your Django application directly on AWS:
+
+### Prerequisites:
+
+- **AWS Account**: You already have an AWS account.
+- **EC2 Instance**: You should have an EC2 instance (Ubuntu or Amazon Linux is a good choice) running. If not, I can guide you through launching one.
+
+### Steps to Deploy Django on AWS EC2
+
+#### 1. **SSH into Your EC2 Instance**
+
+1. Use SSH to connect to your EC2 instance:
+
+   ```bash
+   ssh -i "your_key_name.pem" ubuntu@your_ec2_public_ip
+   ```
+
+#### 2. **Update the EC2 Instance**
+
+Once connected, update your instance’s packages:
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+#### 3. **Install Python, Pip, and Virtualenv**
+
+1. **Install Python 3 and Pip**:
+
+   ```bash
+   sudo apt install python3-pip python3-dev python3-venv -y
+   ```
+
+2. **Install virtualenv** to create an isolated Python environment:
+
+   ```bash
+   sudo pip3 install virtualenv
+   ```
+
+#### 4. **Clone Your Django Project**
+
+1. Navigate to the directory where you want to store your project:
+
+   ```bash
+   cd /home/ubuntu
+   ```
+
+2. **Clone your project from GitHub** or upload it using any other method:
+
+   ```bash
+   git clone https://github.com/your_username/your_repository.git
+   ```
+
+3. Navigate into your project’s directory:
+
+   ```bash
+   cd your_repository
+   ```
+
+#### 5. **Set Up the Virtual Environment**
+
+1. **Create a virtual environment**:
+
+   ```bash
+   python3 -m venv venv
+   ```
+
+2. **Activate the virtual environment**:
+
+   ```bash
+   source venv/bin/activate
+   ```
+
+3. **Install your project’s dependencies**:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+#### 6. **Configure PostgreSQL or MySQL (if needed)**
+
+If you’re using a database like **PostgreSQL** or **MySQL**, you’ll need to set up the connection:
+
+1. **Install PostgreSQL** (if you're using PostgreSQL):
+
+   ```bash
+   sudo apt install postgresql postgresql-contrib -y
+   ```
+
+2. **Create the PostgreSQL database** and user (you can skip this step if you’re using AWS RDS):
+
+   ```bash
+   sudo -u postgres psql
+   CREATE DATABASE your_database_name;
+   CREATE USER your_database_user WITH PASSWORD 'your_password';
+   ALTER ROLE your_database_user SET client_encoding TO 'utf8';
+   ALTER ROLE your_database_user SET default_transaction_isolation TO 'read committed';
+   ALTER ROLE your_database_user SET timezone TO 'UTC';
+   GRANT ALL PRIVILEGES ON DATABASE your_database_name TO your_database_user;
+   \q
+   ```
+
+3. **Update Django’s `settings.py`** to configure the database:
+
+   ```python
+   DATABASES = {
+       'default': {
+           'ENGINE': 'django.db.backends.postgresql',
+           'NAME': 'your_database_name',
+           'USER': 'your_database_user',
+           'PASSWORD': 'your_password',
+           'HOST': 'localhost',
+           'PORT': '5432',
+       }
+   }
+   ```
+
+#### 7. **Run Django Migrations and Collect Static Files**
+
+1. **Run the Django migrations** to set up the database schema:
+
+   ```bash
+   python manage.py migrate
+   ```
+
+2. **Collect static files**:
+
+   ```bash
+   python manage.py collectstatic
+   ```
+
+#### 8. **Configure Gunicorn and Nginx**
+
+To run Django on a production server, we typically use **Gunicorn** (as the application server) and **Nginx** (as a reverse proxy).
+
+1. **Install Gunicorn**:
+
+   ```bash
+   pip install gunicorn
+   ```
+
+2. **Test Gunicorn**:
+
+   ```bash
+   gunicorn --workers 3 your_project_name.wsgi:application
+   ```
+
+   - If this works, Gunicorn is running your Django app successfully.
+
+#### 9. **Install and Configure Nginx**
+
+1. **Install Nginx**:
+
+   ```bash
+   sudo apt install nginx -y
+   ```
+
+2. **Create an Nginx Configuration for Django**:
+
+   Create a configuration file for your Django project in `/etc/nginx/sites-available/your_project_name`:
+
+   ```bash
+   sudo nano /etc/nginx/sites-available/your_project_name
+   ```
+
+   Add the following configuration (update the paths and domain names accordingly):
+
+   ```nginx
+   server {
+       listen 80;
+       server_name your_domain_or_ip;
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location /static/ {
+           alias /home/ubuntu/your_project_name/static/;
+       }
+
+       location /media/ {
+           alias /home/ubuntu/your_project_name/media/;
+       }
+   }
+   ```
+
+3. **Enable the Nginx Configuration**:
+
+   - Create a symbolic link from **sites-available** to **sites-enabled**:
+
+     ```bash
+     sudo ln -s /etc/nginx/sites-available/your_project_name /etc/nginx/sites-enabled
+     ```
+
+   - Remove the default Nginx configuration:
+
+     ```bash
+     sudo rm /etc/nginx/sites-enabled/default
+     ```
+
+4. **Restart Nginx**:
+
+   ```bash
+   sudo systemctl restart nginx
+   ```
+
+#### 10. **Start Django with Gunicorn**
+
+1. **Run Gunicorn** as a background process:
+
+   ```bash
+   gunicorn --workers 3 --bind unix:/home/ubuntu/your_project_name/your_project_name.sock your_project_name.wsgi:application
+   ```
+
+2. **Configure Gunicorn to run as a service**:
+   You can set up a Gunicorn service that automatically starts your application when the server restarts.
+
+#### 11. **Open EC2 Ports for Web Traffic**
+
+Make sure that your EC2 instance’s **security group** allows inbound traffic on ports **80** (HTTP) and **443** (HTTPS, if using SSL).
+
+1. Go to **EC2 Dashboard**.
+2. Select your **EC2 instance**.
+3. Scroll down to **Security Groups**, click the **group ID**, and add rules for HTTP (port 80) and HTTPS (port 443).
+
+#### 12. **Access Your Django Application**
+
+Now, your application should be accessible at the **public IP address** or domain of your EC2 instance:
+
+```
+http://your_ec2_public_ip
+```
+
+If you have a domain name, you can configure DNS to point to your EC2 instance's IP address.
+
+---
+
+This guide outlines a basic setup for deploying Django on EC2 without Docker. Let me know if you need help with any specific steps or further details!
